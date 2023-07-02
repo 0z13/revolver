@@ -1,0 +1,130 @@
+package buffer
+
+import "fmt"
+
+type PacketBuffer struct {
+	inner    [512]byte
+	pos       int
+}
+
+func New() *PacketBuffer {
+	var b [512]byte
+	return &PacketBuffer{
+		inner: b,
+		pos: 0,
+	}
+}
+
+func (b *PacketBuffer) Pos() int {
+	return b.pos
+}
+
+func (b *PacketBuffer) Inner() [512]byte {
+	return b.inner
+}
+
+func (b *PacketBuffer) Step(steps int) {
+	b.pos += steps
+}
+
+func (b *PacketBuffer) Seek(pos int) {
+	b.pos = pos 
+}
+
+func (b *PacketBuffer) Put(pos int, value byte) {
+	// Mostly for testing.
+	b.inner[pos] = value
+}
+
+
+func (b *PacketBuffer) MustRead() byte {
+	if b.pos >= 512 {
+		panic("read: overran buffer")
+	}
+	ret := b.inner[b.pos]
+	b.pos += 1
+	return ret
+}
+
+func (b *PacketBuffer) MustGet(pos int) byte {
+	if b.pos >= 512 {
+		panic("get: overran buffer")
+	}
+	return b.inner[pos]
+}
+
+func (b *PacketBuffer) MustGetRange(start int, end int) []byte {
+	if b.pos >= 512 {
+		panic("getRange: overran buffer")
+	}
+	return b.inner[start:end]
+}
+
+func (b *PacketBuffer) MustReadUInt16() uint16 {
+	firstPart := b.MustRead()
+	secondPart := b.MustRead()
+	return (uint16(firstPart) << 8) | uint16(secondPart)
+}
+
+func (b *PacketBuffer) MustReadUInt32() uint32 {
+	firstPart := uint32(b.MustRead()) << 24
+	secondPart := uint32(b.MustRead()) << 16
+	thirdPart := uint32(b.MustRead()) << 8
+	fourthPart := uint32(b.MustRead())
+	return (firstPart | secondPart | thirdPart | fourthPart) 
+}
+
+func (b *PacketBuffer) MustReadQualifiedName() string {
+
+	jumped := false
+	maxJumps := 10
+	jumpsPerformed := 0
+
+	resStr := "" 
+	pos := b.Pos()
+
+	delim := ""
+
+	for ;; {
+		if jumpsPerformed >= maxJumps {
+			panic("Limits of jumps exceeded")
+		}
+		len := b.MustGet(pos)
+		// If len has to most significant big set, it represent a jump to some other jump in the packet...
+		if (len & 0xC0) == 0xC0 {
+			if !jumped {
+				b.Seek(pos + 2)
+			}
+
+			b2 := uint16(b.MustGet(pos + 1))
+			offset := (((uint16(len)) ^ 0xC) << 8) | b2
+			pos = int(offset)
+
+			jumped = true
+			jumpsPerformed += 1
+
+			continue
+		} else {
+			pos += 1
+
+			if len == 0 {
+				break;
+			}
+			resStr += delim
+
+			strBuffer := b.MustGetRange(b.pos, int(len))
+			resStr += string(strBuffer)
+			delim = "."
+			pos += int(len)
+		}
+	}
+	if !jumped {
+		b.Seek(pos)
+	}
+	return resStr
+
+}
+
+
+
+
