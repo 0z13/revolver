@@ -1,6 +1,9 @@
 package buffer
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 type PacketBuffer struct {
 	inner    [512]byte
@@ -15,16 +18,29 @@ func New() *PacketBuffer {
 	}
 }
 
+func (b *PacketBuffer) SetInner(bs [512]byte) {
+	b.inner = bs
+}
+
 func (b *PacketBuffer) Pos() int {
 	return b.pos
 }
 
-func (b *PacketBuffer) Inner() [512]byte {
-	return b.inner
+func (b *PacketBuffer) Inner() []byte {
+	return b.inner[:]
 }
 
 func (b *PacketBuffer) Step(steps int) {
 	b.pos += steps
+}
+
+func (b *PacketBuffer) Set(pos int, val byte) {
+	b.inner[pos] = val
+}
+
+func (b *PacketBuffer) SetU16(pos int, val uint16) {
+	b.Set(pos, byte(val >> 8))	
+	b.Set(pos, byte((val >> 8) & 0xFF))	
 }
 
 func (b *PacketBuffer) Seek(pos int) {
@@ -48,16 +64,17 @@ func (b *PacketBuffer) MustRead() byte {
 
 func (b *PacketBuffer) MustGet(pos int) byte {
 	if b.pos >= 512 {
-		panic("get: overran buffer")
+		fmt.Println("get: overran buffer - pos: ", pos)
+		panic("")
 	}
 	return b.inner[pos]
 }
 
-func (b *PacketBuffer) MustGetRange(start int, end int) []byte {
+func (b *PacketBuffer) MustGetRange(start int, length int) []byte {
 	if b.pos >= 512 {
 		panic("getRange: overran buffer")
 	}
-	return b.inner[start:end]
+	return b.inner[start:(start + length)]
 }
 
 func (b *PacketBuffer) MustReadUInt16() uint16 {
@@ -75,29 +92,27 @@ func (b *PacketBuffer) MustReadUInt32() uint32 {
 }
 
 func (b *PacketBuffer) MustReadQualifiedName() string {
-
 	jumped := false
-	maxJumps := 10
+	maxJumps := 5
 	jumpsPerformed := 0
 
 	resStr := "" 
 	pos := b.Pos()
-
 	delim := ""
 
 	for ;; {
-		if jumpsPerformed >= maxJumps {
+		if jumpsPerformed > maxJumps {
 			panic("Limits of jumps exceeded")
 		}
-		len := b.MustGet(pos)
+		length := b.MustGet(pos)
 		// If len has to most significant big set, it represent a jump to some other jump in the packet...
-		if (len & 0xC0) == 0xC0 {
+		if (length & 0xC0) == 0xC0 {
 			if !jumped {
 				b.Seek(pos + 2)
 			}
 
 			b2 := uint16(b.MustGet(pos + 1))
-			offset := (((uint16(len)) ^ 0xC) << 8) | b2
+			offset := (((uint16(length)) ^ 0xC0) << 8) | b2
 			pos = int(offset)
 
 			jumped = true
@@ -107,24 +122,70 @@ func (b *PacketBuffer) MustReadQualifiedName() string {
 		} else {
 			pos += 1
 
-			if len == 0 {
+			if length == 0 {
 				break;
 			}
+
 			resStr += delim
 
-			strBuffer := b.MustGetRange(b.pos, int(len))
+			strBuffer := b.MustGetRange(pos, int(length))
 			resStr += string(strBuffer)
 			delim = "."
-			pos += int(len)
+			pos += int(length)
 		}
 	}
 	if !jumped {
 		b.Seek(pos)
 	}
-	return resStr
 
+	return resStr
 }
 
+func (b *PacketBuffer) mustWrite(v byte) {
+	if b.pos >= 512 {
+		panic("end of buffer")
+	}
+	b.inner[b.pos] = v
+	b.pos += 1
+}
 
+func (b *PacketBuffer) MustWriteU8(v byte) {
+	b.mustWrite(v)
+}
 
+func (b *PacketBuffer) MustWriteU16(v uint16) {
+	b.mustWrite(byte(v >> 8))
+	b.mustWrite(byte(v & 0xFF))
+}
 
+func (b *PacketBuffer) MustWriteU32(v uint32) {
+	b.mustWrite(byte((v >> 24) & 0xFF))
+	b.mustWrite(byte((v >> 16) & 0xFF))
+	b.mustWrite(byte((v >> 8) & 0xFF))
+	b.mustWrite(byte((v >> 0) & 0xFF))
+}
+
+func (b *PacketBuffer) MustWriteQName(qualifiedName string) {
+	splits := strings.Split(qualifiedName, ".")
+	for _, label := range splits {
+		length := len(label)
+		if length > 63 {
+			panic("label length > 63 characters.")
+		}
+		b.MustWriteU8(byte(length))
+		for _, c := range label {
+			b.MustWriteU8(byte(c))
+			fmt.Print(byte(c))
+		}
+	}
+	b.MustWriteU8(0)
+}
+
+func FromSlice(bufr []byte) *PacketBuffer {
+	arr := [512]byte{}
+	copy(arr[:], bufr)
+	return &PacketBuffer{
+		inner: arr,
+		pos:   0,
+	}
+}
