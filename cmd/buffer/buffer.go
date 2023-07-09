@@ -1,7 +1,5 @@
 package buffer
 
-import "fmt"
-
 type PacketBuffer struct {
 	inner    [512]byte
 	pos       int
@@ -13,6 +11,10 @@ func New() *PacketBuffer {
 		inner: b,
 		pos: 0,
 	}
+}
+
+func (b *PacketBuffer) SetInner(bs [512]byte) {
+	b.inner = bs
 }
 
 func (b *PacketBuffer) Pos() int {
