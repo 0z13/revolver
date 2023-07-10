@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 	"revolver/cmd/buffer"
-	dnspacket "revolver/cmd/header"
+	dnspacket "revolver/cmd/packet"
 )
 func main() {
 
@@ -38,5 +38,21 @@ func main() {
     packet := dnspacket.New()
     packet.FromPacketBuffer(buffer)
     
-    fmt.Println(packet)
+    fmt.Printf("%+v\n", packet.HDR)
+    for _, q := range packet.Questions {
+        fmt.Printf("%+v\n", q)
+    }
+
+    for _, r := range packet.Answers {
+        fmt.Printf("%+v\n", r)
+    }
+
+    for _, blah := range packet.Authorities {
+        fmt.Printf("%+v\n", blah)
+    }
+
+    for _, rec := range packet.Resources {
+        fmt.Printf("%+v\n", rec)
+    }
+
 }

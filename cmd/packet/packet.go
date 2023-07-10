@@ -1,4 +1,4 @@
-package dnsheader
+package dnspacket
 
 import "revolver/cmd/buffer"
 import "net"
