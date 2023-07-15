@@ -202,3 +202,5 @@ func (p *DNSPacket) FromPacketBuffer(b *buffer.PacketBuffer) {
         p.Resources = append(p.Resources, ReadDNSRecord(b))
     }
 }
+
+

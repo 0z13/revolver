@@ -1,5 +1,9 @@
 package buffer
 
+import (
+	"bytes"
+	"strings"
+)
 
 type PacketBuffer struct {
 	inner    [512]byte
@@ -126,9 +130,47 @@ func (b *PacketBuffer) MustReadQualifiedName() string {
 	}
 
 	return resStr
-
 }
 
+func (b *PacketBuffer) mustWrite(v byte) {
+	if b.pos >= 512 {
+		panic("end of buffer")
+	}
+	b.inner[b.pos] = v
+	b.pos += 1
+}
 
+func (b *PacketBuffer) MustWriteU8(v byte) {
+	b.mustWrite(v)
+}
+
+func (b *PacketBuffer) MustWriteU16(v uint16) {
+	b.mustWrite(byte(v >> 8))
+	b.mustWrite(byte(v & 0xFF))
+}
+
+func (b *PacketBuffer) MustWriteU32(v uint32) {
+	b.mustWrite(byte((v >> 24) & 0xFF))
+	b.mustWrite(byte((v >> 16) & 0xFF))
+	b.mustWrite(byte((v >> 8) & 0xFF))
+	b.mustWrite(byte((v >> 0) & 0xFF))
+	b.mustWrite(byte(v & 0xFF))
+}
+
+func (b *PacketBuffer) MustWriteQName(qualifiedName string) {
+	splits := strings.Split(qualifiedName, ".")
+
+	for _, label := range splits {
+		length := len(label)
+		if length > 63 {
+			panic("label length > 63 characters.")
+		}
+		b.MustWriteU8(byte(length))
+		for _, c := range label {
+			b.MustWriteU8(byte(c))
+		}
+	}
+	b.MustWriteU8(0)
+}
 
 
