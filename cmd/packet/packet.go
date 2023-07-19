@@ -1,7 +1,10 @@
 package dnspacket
 
-import "revolver/cmd/buffer"
-import "net"
+import (
+	"fmt"
+	"net"
+	"revolver/cmd/buffer"
+)
 
 type RCODE byte
 const (
@@ -20,20 +23,26 @@ const (
     // AAAA
 )
 
-type DnsQuestion struct {
+type DNSQuestion struct {
     Name string
     QType QueryType
 }
 
-func ReadDnsQuestion(b *buffer.PacketBuffer) DnsQuestion {
+func MustReadDNSQuestion(b *buffer.PacketBuffer) DNSQuestion {
     name := b.MustReadQualifiedName() 
     qtype := QueryType(b.MustReadUInt16())
     b.MustReadUInt16() // Class name.
-    return DnsQuestion{
+    return DNSQuestion{
         Name: name,
         QType: qtype,
     }
 }
+ func (q *DNSQuestion) MustWriteDNSQuestion(b *buffer.PacketBuffer) {
+	b.MustWriteQName(q.Name)
+	t := uint16(q.QType)
+	b.MustWriteU16(t)
+	b.MustWriteU16(1)
+ }
 
 type DNSRecord interface {
     Domain() string
@@ -57,7 +66,7 @@ func (r *UnknownRecord) TTL() uint32 {
 
 type ARecord struct {
     domain string
-    addr net.IP 
+    Addr net.IP 
     ttl  uint32
 }
 
@@ -87,7 +96,7 @@ func ReadDNSRecord(b *buffer.PacketBuffer) DNSRecord {
             )
             return &ARecord{
             	domain: domainName,
-            	addr:   addr,
+            	Addr:   addr,
             	ttl:    ttl,
             }
         case UNKNOWN:
@@ -102,6 +111,49 @@ func ReadDNSRecord(b *buffer.PacketBuffer) DNSRecord {
             panic("Only supports A records atm :')")
     }
 }
+
+func MustWriteDNSRecord(b *buffer.PacketBuffer, d DNSRecord) int {
+	start := b.Pos()
+	switch d.(type) {
+	case *ARecord:
+		b.MustWriteQName(d.Domain())
+		b.MustWriteU16(uint16(A))
+		b.MustWriteU16(1)
+		b.MustWriteU32(d.TTL())
+		b.MustWriteU16(4)
+		octets := d.(*ARecord).Addr
+		b.MustWriteU8(octets[0])
+		b.MustWriteU8(octets[1])
+		b.MustWriteU8(octets[2])
+		b.MustWriteU8(octets[3])
+	case *UnknownRecord:
+		fmt.Printf("skipping unknown record %+v\n", d)
+	}
+	return (b.Pos() - start)
+} 
+
+func MustWritePacket(b *buffer.PacketBuffer, d *DNSPacket) {	
+	d.HDR.QDCOUNT = uint16(len(d.Questions))
+	d.HDR.ANCOUNT = uint16(len(d.Answers))
+	d.HDR.NSCOUNT = uint16(len(d.Authorities))
+	d.HDR.ARCOUNT = uint16(len(d.Resources))
+
+	d.HDR.MustWriteHddrToBuf(*b)
+
+	for _, q := range d.Questions {
+		q.MustWriteDNSQuestion(b)
+	}
+	for _, d := range d.Resources{
+		MustWriteDNSRecord(b, d)
+	}
+	for _, d := range d.Authorities{
+		MustWriteDNSRecord(b, d)
+	}
+	for _, d := range d.Resources{
+		MustWriteDNSRecord(b, d)
+	}
+}
+
 
 type DnsHeader struct {
 	Id			uint16
@@ -165,9 +217,32 @@ func HddrFromBuffer(buffer *buffer.PacketBuffer) *DnsHeader {
     return d
 }
 
+// Can't convert a byte to uint8 for some reason..
+func btoi(b bool) byte {
+	if b {
+		return 1
+	} else {
+		return 0
+	}
+}
+
+func (d *DnsHeader) MustWriteHddrToBuf(b buffer.PacketBuffer) {
+	b.MustWriteU16(d.Id)
+	flags := (btoi(d.RD) | (btoi(d.TC) << 1) | (btoi(d.AA) << 2) | (d.OPCODE << 3) | (btoi(d.QR) << 7))
+	b.MustWriteU8(flags)
+	// TODO.. Probably should provide structure for RCODE bits.
+	flags = ((byte(d.RCODE) << 4)) | (btoi(d.Z) << 6) | (btoi(d.RA) << 7)
+	b.MustWriteU8(flags)
+	b.MustWriteU16(d.QDCOUNT)
+	b.MustWriteU16(d.ANCOUNT)
+	b.MustWriteU16(d.NSCOUNT)
+	b.MustWriteU16(d.ARCOUNT)
+}
+
+
 type DNSPacket struct {
     HDR *DnsHeader
-    Questions []DnsQuestion
+    Questions []DNSQuestion
     Answers []DNSRecord
     Authorities []DNSRecord
     Resources []DNSRecord
@@ -176,7 +251,7 @@ type DNSPacket struct {
 func New() DNSPacket {
     return DNSPacket{
     	HDR:         &DnsHeader{},
-    	Questions:   []DnsQuestion{},
+    	Questions:   []DNSQuestion{},
     	Answers:     []DNSRecord{},
     	Authorities: []DNSRecord{},
     	Resources:   []DNSRecord{},
@@ -187,7 +262,7 @@ func (p *DNSPacket) FromPacketBuffer(b *buffer.PacketBuffer) {
     p.HDR = HddrFromBuffer(b)
 
     for i := uint16(0); i <= p.HDR.QDCOUNT; i++ {
-        p.Questions = append(p.Questions, ReadDnsQuestion(b))
+        p.Questions = append(p.Questions, MustReadDNSQuestion(b))
     }
 
     for i := uint16(0); i <= p.HDR.ANCOUNT; i++ {

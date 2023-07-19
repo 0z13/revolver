@@ -1,7 +1,6 @@
 package buffer
 
 import (
-	"bytes"
 	"strings"
 )
 
