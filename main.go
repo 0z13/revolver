@@ -1,65 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io"
 	"net"
-	"os"
 	"revolver/cmd/buffer"
 	dnspacket "revolver/cmd/packet"
 )
 
 func main() {
-	serve()
-}
-
-func test() {
-	fileName := "./response_packet.txt"
-
-	// Open the file
-	file, err := os.Open(fileName)
-	if err != nil {
-		fmt.Println("Error opening file:", err)
-		return
-	}
-	defer file.Close()
-
-	// Read the file contents
-	fileContents, err := io.ReadAll(file)
-	if err != nil {
-		fmt.Println("Error reading file:", err)
-		return
-	}
-
-	// Create an array of type [512]byte
-	var innerBuffer [512]byte
-
-	// Just figured i can do this
-	// s = innerBuffer[:]
-	copy(innerBuffer[:], fileContents)
-
-	buffer := buffer.New()
-	buffer.SetInner(innerBuffer)
-
-	packet := dnspacket.New()
-	packet.FromPacketBuffer(buffer)
-
-	fmt.Printf("%+v\n", packet.HDR)
-	for _, q := range packet.Questions {
-		fmt.Printf("%+v\n", q)
-	}
-
-	for _, r := range packet.Answers {
-		fmt.Printf("%+v\n", r)
-	}
-
-	for _, blah := range packet.Authorities {
-		fmt.Printf("%+v\n", blah)
-	}
-
-	for _, rec := range packet.Resources {
-		fmt.Printf("%+v\n", rec)
-	}
+    serve()
 }
 
 func serve() {
@@ -67,22 +17,8 @@ func serve() {
 	qtype := dnspacket.QueryType(1)
 
 	// bind udp to arbritrary port
-	addr, err := net.ResolveUDPAddr("udp", ":53033")
-
-	if err != nil {
-
-		fmt.Println("zzzzz")
-		panic("zzz")
-	}
-
-	sock, err := net.ListenUDP("udp", addr)
-	defer sock.Close()
-
-	if err != nil {
-		panic("something went wrongk")
-	}
-
-	// build query
+    // Try without port..
+    udpAddr, err := net.ResolveUDPAddr("udp", "8.8.8.8:53")
 	qs := []dnspacket.DNSQuestion{
 		{
 			Name:  qname,
@@ -94,8 +30,7 @@ func serve() {
 		Questions:   qs,
 	}
 	packet.HDR.RD = true
-	packet.HDR.QR = true
-	packet.HDR.QDCOUNT = 1
+	packet.HDR.QDCOUNT = 0
 	packet.HDR.Id = 6666 
 	packet.Questions = qs 
 
@@ -103,39 +38,42 @@ func serve() {
 	dnspacket.MustWritePacket(b, &packet)
 	// Next just write this packet to the buffer.
 	pInner := b.Inner()
-	fmt.Println(pInner)
 
-	googleDNS := &net.UDPAddr{
-		Port: 53,
-		IP:   net.ParseIP("8.8.8.8"),
-	}
-	_, err = sock.WriteToUDP(pInner[:], googleDNS) 
+    conn, err := net.DialUDP("udp", nil, udpAddr) 
+
 	if err != nil {
 		fmt.Println(err)
-		panic("couldn't write")
+		panic("couldn't dail")
 	}
+	_, err = conn.Write(pInner[:])
+	_, err = conn.Write([]byte("\n"))
 
-	resultBuffer := buffer.New().Inner()
-	x,conn ,err := sock.ReadFromUDP(resultBuffer[:])
-	fmt.Println("bla")
-	fmt.Println(conn)
-	fmt.Println(x)
-	fmt.Println(err)
+    if err != nil {
+        fmt.Println(err)
+    }
 
-	fmt.Printf("%+v\n", packet.HDR)
-	for _, q := range packet.Questions {
-		fmt.Printf("%+v\n", q)
-	}
+    answerGoogleWrongType := make([]byte, 512) 
+	_, err = bufio.NewReader(conn).Read(answerGoogleWrongType)
+    
+    
+    fmt.Println("recieved something :)")
 
-	for _, r := range packet.Answers {
-		fmt.Printf("%+v\n", r)
-	}
+    // fix this in post :P 
+    answerGoogle := [512]byte{}
+    copy(answerGoogle[:], answerGoogleWrongType)
+    bb := buffer.New()
 
-	for _, blah := range packet.Authorities {
-		fmt.Printf("%+v\n", blah)
-	}
+    bb.SetInner(answerGoogle)
+	returnPacket := dnspacket.New()
+    returnPacket.FromPacketBuffer(bb)
 
-	for _, rec := range packet.Resources {
-		fmt.Printf("%+v\n", rec)
-	}
+    fmt.Printf("%v",returnPacket.HDR)
+
+    for _, q := range returnPacket.Questions {
+        fmt.Printf("question: %+v\n",q)
+    }
+
+    for _, a := range returnPacket.Answers {
+        fmt.Printf("answer: %+v\n",a)
+    }
 }

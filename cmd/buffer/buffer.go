@@ -1,6 +1,7 @@
 package buffer
 
 import (
+	"fmt"
 	"strings"
 )
 
@@ -54,7 +55,8 @@ func (b *PacketBuffer) MustRead() byte {
 
 func (b *PacketBuffer) MustGet(pos int) byte {
 	if b.pos >= 512 {
-		panic("get: overran buffer")
+		fmt.Println("get: overran buffer - pos: ", pos)
+		panic("")
 	}
 	return b.inner[pos]
 }
@@ -81,7 +83,6 @@ func (b *PacketBuffer) MustReadUInt32() uint32 {
 }
 
 func (b *PacketBuffer) MustReadQualifiedName() string {
-
 	jumped := false
 	maxJumps := 5
 	jumpsPerformed := 0
@@ -153,12 +154,10 @@ func (b *PacketBuffer) MustWriteU32(v uint32) {
 	b.mustWrite(byte((v >> 16) & 0xFF))
 	b.mustWrite(byte((v >> 8) & 0xFF))
 	b.mustWrite(byte((v >> 0) & 0xFF))
-	b.mustWrite(byte(v & 0xFF))
 }
 
 func (b *PacketBuffer) MustWriteQName(qualifiedName string) {
 	splits := strings.Split(qualifiedName, ".")
-
 	for _, label := range splits {
 		length := len(label)
 		if length > 63 {
@@ -167,6 +166,7 @@ func (b *PacketBuffer) MustWriteQName(qualifiedName string) {
 		b.MustWriteU8(byte(length))
 		for _, c := range label {
 			b.MustWriteU8(byte(c))
+			fmt.Print(byte(c))
 		}
 	}
 	b.MustWriteU8(0)

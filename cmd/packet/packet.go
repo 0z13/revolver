@@ -57,7 +57,11 @@ type UnknownRecord struct {
 }
 
 func (r *UnknownRecord) Domain() string {
-    return r.domain
+    if r.domain == "" {
+		return "err? empty domain"
+	} else {
+		return r.domain
+	}
 }
 
 func (r *UnknownRecord) TTL() uint32 {
@@ -94,6 +98,9 @@ func ReadDNSRecord(b *buffer.PacketBuffer) DNSRecord {
                 uint8((addressRaw >>  8) & 0xFF),
                 uint8((addressRaw >> 0) & 0xFF),
             )
+			println("trying to read a dns record.. dom:", domainName)
+			println("trying to read a dns record.. addr:", addr)
+			println("trying to read a dns record.. addr:", ttl)
             return &ARecord{
             	domain: domainName,
             	Addr:   addr,
@@ -138,7 +145,7 @@ func MustWritePacket(b *buffer.PacketBuffer, d *DNSPacket) {
 	d.HDR.NSCOUNT = uint16(len(d.Authorities))
 	d.HDR.ARCOUNT = uint16(len(d.Resources))
 
-	d.HDR.MustWriteHddrToBuf(*b)
+	d.HDR.MustWriteHddrToBuf(b)
 
 	for _, q := range d.Questions {
 		q.MustWriteDNSQuestion(b)
@@ -226,7 +233,7 @@ func btoi(b bool) byte {
 	}
 }
 
-func (d *DnsHeader) MustWriteHddrToBuf(b buffer.PacketBuffer) {
+func (d *DnsHeader) MustWriteHddrToBuf(b *buffer.PacketBuffer) {
 	b.MustWriteU16(d.Id)
 	flags := (btoi(d.RD) | (btoi(d.TC) << 1) | (btoi(d.AA) << 2) | (d.OPCODE << 3) | (btoi(d.QR) << 7))
 	b.MustWriteU8(flags)
@@ -261,19 +268,19 @@ func New() DNSPacket {
 func (p *DNSPacket) FromPacketBuffer(b *buffer.PacketBuffer) {
     p.HDR = HddrFromBuffer(b)
 
-    for i := uint16(0); i <= p.HDR.QDCOUNT; i++ {
+    for i := uint16(0); i < p.HDR.QDCOUNT; i++ {
         p.Questions = append(p.Questions, MustReadDNSQuestion(b))
     }
 
-    for i := uint16(0); i <= p.HDR.ANCOUNT; i++ {
+    for i := uint16(0); i < p.HDR.ANCOUNT; i++ {
         p.Answers = append(p.Answers, ReadDNSRecord(b))
     }
 
-    for i := uint16(0); i <= p.HDR.NSCOUNT; i++ {
+    for i := uint16(0); i < p.HDR.NSCOUNT; i++ {
         p.Authorities = append(p.Authorities, ReadDNSRecord(b))
     }
 
-    for i := uint16(0); i <= p.HDR.ARCOUNT; i++ {
+    for i := uint16(0); i < p.HDR.ARCOUNT; i++ {
         p.Resources = append(p.Resources, ReadDNSRecord(b))
     }
 }
