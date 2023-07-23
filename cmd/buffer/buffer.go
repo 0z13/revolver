@@ -34,6 +34,15 @@ func (b *PacketBuffer) Step(steps int) {
 	b.pos += steps
 }
 
+func (b *PacketBuffer) Set(pos int, val byte) {
+	b.inner[pos] = val
+}
+
+func (b *PacketBuffer) SetU16(pos int, val uint16) {
+	b.Set(pos, byte(val >> 8))	
+	b.Set(pos, byte((val >> 8) & 0xFF))	
+}
+
 func (b *PacketBuffer) Seek(pos int) {
 	b.pos = pos 
 }

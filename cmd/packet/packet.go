@@ -20,6 +20,10 @@ type QueryType uint16
 const (
     UNKNOWN QueryType = iota
     A
+	NS
+	CNAME = 5
+	AAAA = 25
+
     // AAAA
 )
 
@@ -43,6 +47,8 @@ func MustReadDNSQuestion(b *buffer.PacketBuffer) DNSQuestion {
 	b.MustWriteU16(t)
 	b.MustWriteU16(1)
  }
+
+// Boiler plate records spam comes next.
 
 type DNSRecord interface {
     Domain() string
@@ -82,10 +88,77 @@ func (r *ARecord) TTL() uint32 {
     return r.ttl
 }
 
+type AAAARecord struct {
+    domain string
+    Addr net.IP 
+    ttl  uint32
+}
+
+func (r *AAAARecord) Domain() string {
+    return r.domain
+}
+
+func (r *AAAARecord) TTL() uint32 {
+    return r.ttl
+}
+
+type NSRecord struct {
+    domain string
+    Host string 
+    ttl  uint32
+}
+
+func (r *NSRecord) Domain() string {
+    return r.domain
+}
+
+func (r *NSRecord) TTL() uint32 {
+    return r.ttl
+}
+
+
+type CNameRecord struct {
+    domain string
+    Host string 
+    ttl  uint32
+}
+
+func (r *CNameRecord) Domain() string {
+    return r.domain
+}
+
+func (r *CNameRecord) TTL() uint32 {
+    return r.ttl
+}
+
+// TODO rename +  move to utils or something
+// also IDK 
+func whyIsThisSoPainfulV6(a, b, c, d uint32) net.IP {
+	return net.IP{
+                uint8((a >> 24) & 0xFF),
+                uint8((a >> 16) & 0xFF),
+                uint8((a >>  8) & 0xFF),
+                uint8((a >> 0) & 0xFF),
+                uint8((b >> 24) & 0xFF),
+                uint8((b >> 16) & 0xFF),
+                uint8((b >>  8) & 0xFF),
+                uint8((b >> 0) & 0xFF),
+                uint8((c >> 24) & 0xFF),
+                uint8((c >> 16) & 0xFF),
+                uint8((c >>  8) & 0xFF),
+                uint8((c >> 0) & 0xFF),
+                uint8((d >> 24) & 0xFF),
+                uint8((d >> 16) & 0xFF),
+                uint8((d >>  8) & 0xFF),
+                uint8((d >> 0) & 0xFF),
+	}
+}
+
+
 func ReadDNSRecord(b *buffer.PacketBuffer) DNSRecord {
     domainName := b.MustReadQualifiedName()
     qtype := QueryType(b.MustReadUInt16())
-    b.MustReadUInt16() // Class I think. Whatever.
+    b.MustReadUInt16() // Class I think? can't remember. Whatever. dismissed.
     ttl := b.MustReadUInt32()
     dataLen := b.MustReadUInt16()
 
@@ -98,14 +171,36 @@ func ReadDNSRecord(b *buffer.PacketBuffer) DNSRecord {
                 uint8((addressRaw >>  8) & 0xFF),
                 uint8((addressRaw >> 0) & 0xFF),
             )
-			println("trying to read a dns record.. dom:", domainName)
-			println("trying to read a dns record.. addr:", addr)
-			println("trying to read a dns record.. addr:", ttl)
             return &ARecord{
             	domain: domainName,
             	Addr:   addr,
             	ttl:    ttl,
             }
+		case AAAA:
+			addr1 := b.MustReadUInt32()
+			addr2 := b.MustReadUInt32()
+			addr3 := b.MustReadUInt32()
+			addr4 := b.MustReadUInt32()
+			Addr := whyIsThisSoPainfulV6(addr1,addr2,addr3,addr4) 
+			return &AAAARecord{
+				domain: domainName,
+				Addr: Addr,
+				ttl: ttl,
+			}
+		case NS:
+			namespace := b.MustReadQualifiedName()
+			return &NSRecord{
+				domain: domainName,
+				Host:   namespace,
+				ttl:    ttl,
+			}
+		case CNAME:
+			cname := b.MustReadQualifiedName()
+			return &CNameRecord{
+				domain: domainName,
+				Host:   cname,
+				ttl:    ttl,
+			}
         case UNKNOWN:
             b.Step(int(dataLen))
             return &UnknownRecord{
@@ -133,6 +228,11 @@ func MustWriteDNSRecord(b *buffer.PacketBuffer, d DNSRecord) int {
 		b.MustWriteU8(octets[1])
 		b.MustWriteU8(octets[2])
 		b.MustWriteU8(octets[3])
+	case *NSRecord:
+		b.MustWriteQName(d.Domain())
+		b.MustWriteU16(uint16(NS))
+		b.MustWriteU16(1)
+		b.MustWriteU32(d.TTL())
 	case *UnknownRecord:
 		fmt.Printf("skipping unknown record %+v\n", d)
 	}
