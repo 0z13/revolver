@@ -26,8 +26,8 @@ func (b *PacketBuffer) Pos() int {
 	return b.pos
 }
 
-func (b *PacketBuffer) Inner() [512]byte {
-	return b.inner
+func (b *PacketBuffer) Inner() []byte {
+	return b.inner[:]
 }
 
 func (b *PacketBuffer) Step(steps int) {

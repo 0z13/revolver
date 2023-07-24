@@ -8,6 +8,54 @@ import (
 	dnspacket "revolver/cmd/packet"
 )
 
+func lookup(qname string, qtype dnspacket.QueryType) (*dnspacket.DNSPacket returnPacket, error){
+    udpAddr, _ := net.ResolveUDPAddr("udp", "8.8.8.8:53")
+
+	qs := []dnspacket.DNSQuestion{
+		{
+			Name:  qname,
+			QType: qtype,
+		},
+	}
+	packet := dnspacket.DNSPacket{
+		HDR:         &dnspacket.DnsHeader{},
+		Questions:   qs,
+	}
+	packet.HDR.RD = true
+	packet.HDR.QDCOUNT = 0
+	packet.HDR.Id = 6666 
+	packet.Questions = qs 
+
+	b := buffer.New()
+	dnspacket.MustWritePacket(b, &packet)
+
+    conn, err := net.DialUDP("udp", nil, udpAddr) 
+
+	if err != nil {
+		return nil, err
+	}
+	_, err = conn.Write(b.Inner())
+	_, err = conn.Write([]byte("\n"))
+
+    if err != nil {
+		return nil, err
+    }
+
+    ans := make([]byte, 512) 
+	_, err = bufio.NewReader(conn).Read(ans)
+
+	ansbuf := [512]byte{}
+	copy(ansbuf[:], ans)
+
+    returnBuffer := buffer.New()
+	// sigh, array representations are really
+	// never a good choice, huh
+	returnBuffer.SetInner(ansbuf)
+	returnPacket := dnspacket.New()
+    returnPacket.FromPacketBuffer(returnBuffer)
+
+}
+
 func main() {
     serve()
 }
