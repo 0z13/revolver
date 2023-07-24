@@ -210,7 +210,7 @@ func ReadDNSRecord(b *buffer.PacketBuffer) DNSRecord {
             	ttl:     ttl,
             }
         default:
-            panic("Only supports A records atm :')")
+            panic("Only supports A/AAAA/CNAME/NS records atm :')")
     }
 }
 
@@ -233,6 +233,38 @@ func MustWriteDNSRecord(b *buffer.PacketBuffer, d DNSRecord) int {
 		b.MustWriteU16(uint16(NS))
 		b.MustWriteU16(1)
 		b.MustWriteU32(d.TTL())
+
+		pos := b.Pos()
+		b.MustWriteU16(0)
+
+		host := d.(*CNameRecord).Host
+		b.MustWriteQName(host)
+		size := b.Pos() - (pos + 2)
+		b.SetU16(pos, uint16(size))
+	case *CNameRecord:
+		b.MustWriteQName(d.Domain())
+		b.MustWriteU16((uint16(CNAME)))
+		b.MustWriteU16(1)
+		b.MustWriteU32(d.TTL())
+
+		pos := b.Pos()
+		b.MustWriteU16(0)
+
+		host := d.(*CNameRecord).Host
+		b.MustWriteQName(host)
+		size := b.Pos() - (pos + 2)
+		b.SetU16(pos, uint16(size))
+	case *AAAARecord:
+		b.MustWriteQName(d.Domain())
+		b.MustWriteU16(uint16(AAAA))
+		b.MustWriteU16(1)
+		b.MustWriteU32(d.TTL())
+		b.MustWriteU16(16)
+		addr := d.(*AAAARecord).Addr
+
+		for _, segment := range addr {
+			b.MustWriteU8(segment)
+		}
 	case *UnknownRecord:
 		fmt.Printf("skipping unknown record %+v\n", d)
 	}
