@@ -398,6 +398,22 @@ func New() DNSPacket {
     }
 }
 
+func (p *DNSPacket) MustGetSomeARecord() (*ARecord, error) {
+	for _, record := range p.Answers {
+		switch record.(type) {
+		case *ARecord:
+			rec := record.(*ARecord)
+			return rec, nil
+		default:
+			// Fallthrough
+		}
+	}
+	return nil, fmt.Errorf("No A record in question section.")
+}
+
+
+
+
 func FromRaw(b []byte) DNSPacket {
 	buf := buffer.FromSlice(b)
 	p := New()
