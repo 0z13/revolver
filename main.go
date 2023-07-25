@@ -2,13 +2,16 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"net"
+	"os"
 	"revolver/cmd/buffer"
 	dnspacket "revolver/cmd/packet"
 )
 
-func lookup(qname string, qtype dnspacket.QueryType) (*dnspacket.DNSPacket returnPacket, error){
+
+func lookup(qname string, qtype dnspacket.QueryType) ([]byte, error){
     udpAddr, _ := net.ResolveUDPAddr("udp", "8.8.8.8:53")
 
 	qs := []dnspacket.DNSQuestion{
@@ -43,21 +46,44 @@ func lookup(qname string, qtype dnspacket.QueryType) (*dnspacket.DNSPacket retur
 
     ans := make([]byte, 512) 
 	_, err = bufio.NewReader(conn).Read(ans)
-
-	ansbuf := [512]byte{}
-	copy(ansbuf[:], ans)
-
-    returnBuffer := buffer.New()
-	// sigh, array representations are really
-	// never a good choice, huh
-	returnBuffer.SetInner(ansbuf)
-	returnPacket := dnspacket.New()
-    returnPacket.FromPacketBuffer(returnBuffer)
-
+	return ans, nil
 }
 
+
+
 func main() {
-    serve()
+	port := flag.String("l", "1234", "Provide listen port")
+
+	udpAddr, err := net.ResolveUDPAddr("udp", "127.0.0.1:" + *port)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	conn, err := net.ListenUDP("udp", udpAddr)
+
+	for {
+		buf := make([]byte, 512)
+		n, addr, err := conn.ReadFromUDP(buf)
+		if err != nil  {
+			fmt.Println(err)
+			fmt.Println("request length: ", n)
+			os.Exit(1)
+		}
+		p := dnspacket.FromRaw(buf)
+		// Expecting exactly one question.
+		q := p.Questions[0]
+		// 
+		a, err := lookup(q.Name, q.QType)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		
+		conn.WriteToUDP(a, addr)
+	}
+
+
+    //serve()
 }
 
 func serve() {

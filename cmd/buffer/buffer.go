@@ -181,4 +181,11 @@ func (b *PacketBuffer) MustWriteQName(qualifiedName string) {
 	b.MustWriteU8(0)
 }
 
-
+func FromSlice(bufr []byte) *PacketBuffer {
+	arr := [512]byte{}
+	copy(arr[:], bufr)
+	return &PacketBuffer{
+		inner: arr,
+		pos:   0,
+	}
+}

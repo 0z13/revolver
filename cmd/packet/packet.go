@@ -210,6 +210,7 @@ func ReadDNSRecord(b *buffer.PacketBuffer) DNSRecord {
             	ttl:     ttl,
             }
         default:
+	    fmt.Println(qtype)
             panic("Only supports A/AAAA/CNAME/NS records atm :')")
     }
 }
@@ -395,6 +396,13 @@ func New() DNSPacket {
     	Authorities: []DNSRecord{},
     	Resources:   []DNSRecord{},
     }
+}
+
+func FromRaw(b []byte) DNSPacket {
+	buf := buffer.FromSlice(b)
+	p := New()
+	p.FromPacketBuffer(buf)
+	return p
 }
 
 func (p *DNSPacket) FromPacketBuffer(b *buffer.PacketBuffer) {
