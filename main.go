@@ -11,7 +11,24 @@ import (
 )
 
 
-func lookup(qname string, qtype dnspacket.QueryType, id uint16) ([]byte, error){
+func recLookup(qname string, qtype dnspacket.QueryType) {
+	// a.root-server.net
+	ns := "198.41.0.4:53"
+
+	for {
+		fmt.Printf("Attempting to look up %s in ns %s", qname, ns)
+
+		resp, err := lookup(qname, qtype,666 ,ns)
+		if err != nil {
+			fmt.Println(err)
+			os.Exit(1)
+		}
+		
+	}
+}
+
+
+func lookup(qname string, qtype dnspacket.QueryType, id uint16, server string) ([]byte, error){
     udpAddr, _ := net.ResolveUDPAddr("udp", "8.8.8.8:53")
 
 	qs := []dnspacket.DNSQuestion{
