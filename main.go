@@ -10,7 +10,7 @@ import (
 	dnspacket "revolver/cmd/packet"
 )
 
-
+# main driver. 
 func recLookup(qname string, qtype dnspacket.QueryType) {
 	// a.root-server.net
 	ns := "198.41.0.4:53"
