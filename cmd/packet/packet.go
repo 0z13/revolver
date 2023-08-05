@@ -411,6 +411,22 @@ func (p *DNSPacket) MustGetSomeARecord() (*ARecord, error) {
 	return nil, fmt.Errorf("No A record in question section.")
 }
 
+func (p *DNSPacket) GetGlueRecord() (*NSRecord, error) {
+	ns := []string{}	
+    for _, record := range p.Authorities {
+	   switch r := record.(type) {
+	   case *NSRecord: 
+	   x := r.Domain()
+	   ns = append(ns, x)
+	   default:
+
+	   }
+   }
+   // Now let's see if we can fetch a glue record 
+
+
+   return nil, nil
+}
 
 
 

@@ -11,18 +11,34 @@ import (
 )
 
 // main driver. 
-func recLookup(qname string, qtype dnspacket.QueryType) {
+func recLookup(qname string, qtype dnspacket.QueryType) (dnspacket.DNSPacket, error) {
 	// a.root-server.net
 	ns := "198.41.0.4:53"
-
+	id := uint16(5555)
 	for {
-		fmt.Printf("Attempting to look up %s in ns %s", qname, ns)
+		fmt.Printf("Attempting to look up %s in ns %s", id, qname, ns)
 
-		resp, err := lookup(qname, qtype,666 ,ns)
+		lookup, err := lookup(qname, qtype, id ,ns)
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
+
+		response := dnspacket.FromRaw(lookup)
+
+		// 
+		if len(response.Answers) == 0 && response.HDR.RCODE == dnspacket.NOERROR {
+			// Empty answer section, no errors = we got it boise
+			return response, nil
+		} 
+		
+		if response.HDR.RCODE == dnspacket.NXDOMAIN {
+			// Uninteresting answer to me, but obviously a valid answer.
+			println("Authorative server says domain doens't exist.")
+			os.Exit(1)
+		}
+		
+		
 		
 	}
 }
